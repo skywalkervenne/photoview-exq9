@@ -1,0 +1,78 @@
+edition: 1.0.0
+name: photoview-exq9
+access: "default"
+vars: # 全局变量
+  region: "cn-hangzhou"
+  service:
+    name: "photoview"
+    internetAccess: true
+    role: "acs:ram::1474902122091805:role/aliyunfcdefaultrole"
+    description: "创建MySQL并使用"
+    logConfig: auto
+
+services:
+  mysqlCreator: # 业务名称/模块名称
+    component: fc
+    props:
+      region: ${vars.region}
+      service: ${vars.service}
+      function:
+        name: ${vars.service.name}_creator
+        description: "create mysql resource"
+        runtime: custom-container
+        caPort: 9000
+        customContainerConfig:
+          image: registry.cn-hangzhou.aliyuncs.com/serverless_devs/serverless-rds-creator-image:20230519154206
+        memorySize: 1024
+        timeout: 1800
+  photoview:
+    component: fc
+    actions:
+      pre-deploy:
+        - plugin: ${path(./plugin)}
+          args:
+            service_name: ${vars.service.name}
+            function_region: ${vars.region}
+            function_name: ${vars.service.name}_creator
+            oss_bucket: ""
+            oss_object_name: ""
+            endpoint: rds-data.cn-hangzhou.aliyuncs.com
+            databaseName: photoview
+
+    props:
+      region: ${vars.region}
+      service: ${vars.service}
+      function:
+        name: ${vars.service.name}_consumer
+        description: null
+        memorySize: 3072
+        runtime: custom-container
+        timeout: 60
+        caPort: 80
+        instanceConcurrency: 10
+        customContainerConfig:
+          image: registry.cn-hangzhou.aliyuncs.com/serverless_dataapi/fc:0.3 #镜像由https://github.com/chengzhengyubian/fc-photoview-code代码构建
+          command: '["/app/photoview"]'
+      triggers:
+        - name: httpTrigger
+          type: http
+          config:
+            authType: anonymous
+            methods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - HEAD
+              - OPTIONS
+      customDomains:
+        - domainName: auto
+          protocol: HTTP
+          routeConfigs:
+            - path: /*
+              methods:
+                - GET
+                - POST
+                - DELETE
+                - PUT
+                - OPTIONS
